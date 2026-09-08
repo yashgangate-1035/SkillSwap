@@ -4,32 +4,52 @@ import API from '../api/axios';
 
 function Dashboard() {
   const [user, setUser] = useState(null);
+  const [skills, setSkills] = useState([]);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-    
+
     if (!userInfo) {
       navigate('/login');
       return;
     }
 
-    const fetchProfile = async () => {
+    const config = {
+      headers: { Authorization: `Bearer ${userInfo.token}` },
+    };
+
+    const fetchDashboard = async () => {
       try {
-        const config = {
-          headers: { Authorization: `Bearer ${userInfo.token}` }
-        };
-        const { data } = await API.get('/api/users/profile', config);
-        setUser(data);
-      } catch (error) {
-        console.error(error);
+        const [{ data: profile }, { data: userSkills }] = await Promise.all([
+          API.get('/api/users/profile', config),
+          API.get('/api/skills/my-skills', config),
+        ]);
+        setUser(profile);
+        setSkills(userSkills);
+      } catch (requestError) {
+        console.error(requestError);
         localStorage.removeItem('userInfo');
         navigate('/login');
       }
     };
 
-    fetchProfile();
+    fetchDashboard();
   }, [navigate]);
+
+  const handleDelete = async (skillId) => {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+
+    try {
+      await API.delete(`/api/skills/${skillId}`, {
+        headers: { Authorization: `Bearer ${userInfo.token}` },
+      });
+      setSkills((currentSkills) => currentSkills.filter((skill) => skill._id !== skillId));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Failed to delete skill');
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('userInfo');
@@ -51,15 +71,38 @@ function Dashboard() {
         <p className="text-gray-700 mb-2"><strong>Email:</strong> {user.email}</p>
         <p className="text-gray-700"><strong>Joined:</strong> {new Date(user.createdAt).toLocaleDateString()}</p>
       </div>
-      
+
       <div className="mt-8">
         <h3 className="text-2xl font-semibold mb-4 text-gray-800">Your Skills</h3>
-        <div className="bg-gray-50 border border-dashed border-gray-300 p-8 text-center rounded-lg">
-          <p className="text-gray-500">You haven't added any skills to swap yet.</p>
-          <button className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition">
-            Add a Skill
-          </button>
-        </div>
+        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
+        {skills.length === 0 ? (
+          <div className="bg-gray-50 border border-dashed border-gray-300 p-8 text-center rounded-lg">
+            <p className="text-gray-500">You haven't added any skills to swap yet.</p>
+            <button onClick={() => navigate('/add-skill')} className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition">
+              Add a Skill
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {skills.map((skill) => (
+              <div key={skill._id} className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
+                <div className="flex justify-between items-start gap-4">
+                  <div>
+                    <h4 className="text-lg font-semibold text-indigo-700">{skill.title}</h4>
+                    <p className="text-gray-600">{skill.description}</p>
+                    <p className="text-sm text-gray-500 mt-2">Offering: {skill.offering} | Seeking: {skill.seeking}</p>
+                  </div>
+                  <button onClick={() => handleDelete(skill._id)} className="text-red-600 hover:text-red-800 font-medium">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button onClick={() => navigate('/add-skill')} className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition">
+              Add a Skill
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
