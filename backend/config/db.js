@@ -1,33 +1,27 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
 
-let connectionPromise;
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+
+let cachedConnection = null;
 
 const connectDB = async () => {
-  if (mongoose.connection.readyState === 1) {
-    return mongoose.connection;
+  if (cachedConnection) {
+    return cachedConnection;
   }
 
-  if (mongoose.connection.readyState === 2) {
-    return mongoose.connection.asPromise();
-  }
+  try {
+    const conn = await mongoose.connect(process.env.MONGO_URI);
 
-  if (!process.env.MONGO_URI) {
-    throw new Error('MONGO_URI is not configured');
-  }
+    cachedConnection = conn;
 
-  if (!connectionPromise) {
-    connectionPromise = mongoose.connect(process.env.MONGO_URI)
-      .then((conn) => {
-        console.log(`MongoDB Connected: ${conn.connection.host}`);
-        return conn.connection;
-      })
-      .catch((error) => {
-        connectionPromise = undefined;
-        throw error;
-      });
-  }
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
 
-  return connectionPromise;
+    return conn;
+  } catch (error) {
+    console.error(`Database connection failed: ${error.message}`);
+    throw error;
+  }
 };
 
 module.exports = connectDB;
